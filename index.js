@@ -1,6 +1,6 @@
 const baileys = require('@whiskeysockets/baileys');
 const makeWASocket = baileys.default;
-const { useMultiFileAuthState, DisconnectReason, Browsers, fetchLatestBaileysVersion } = baileys;
+const { useMultiFileAuthState, DisconnectReason, Browsers, fetchLatestBaileysVersion, delay } = baileys;
 const qrcode = require('qrcode');
 const express = require('express');
 const pino = require('pino');
@@ -62,15 +62,17 @@ function generarComanda(s){
   return txt;
 }
 
-async function responder(from,texto){
-  if(!sock){console.log('sock no disponible');return;}
-  if(!sesiones[from])sesiones[from]={paso:'inicio'};
+async function responder(from, msg){
+  if(!sock) return;
+  if(!sesiones[from]) sesiones[from]={paso:'inicio'};
   const s=sesiones[from];
   const menu=getMenu();
+  const texto=msg.message?.conversation||msg.message?.extendedTextMessage?.text||'';
   const t=texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  const delay=ms=>new Promise(r=>setTimeout(r,ms));
-  const send=async(txt)=>{await delay(1500);
-    await sock.sendMessage(from,{text:txt});
+
+  const send=async(txt)=>{
+    await delay(2000);
+    await sock.sendMessage(from, {text:txt}, {quoted:msg});
     console.log(`ENVIADO: ${txt.substring(0,60)}`);
   };
 
@@ -100,7 +102,6 @@ async function responder(from,texto){
 async function conectar(){
   const {state,saveCreds}=await useMultiFileAuthState('auth_info');
   const {version}=await fetchLatestBaileysVersion();
-  console.log('Usando Baileys versión WA:',version);
   sock=makeWASocket({
     version,
     auth:state,
@@ -113,12 +114,7 @@ async function conectar(){
   sock.ev.on('connection.update',async({connection,lastDisconnect,qr})=>{
     if(qr){qrImageData=await qrcode.toDataURL(qr);console.log('QR listo');}
     if(connection==='open'){botConectado=true;qrImageData=null;console.log('✅ Conectado!');}
-    if(connection==='close'){
-      botConectado=false;
-      const code=lastDisconnect?.error?.output?.statusCode;
-      console.log('Desconectado código:',code);
-      if(code!==DisconnectReason.loggedOut){setTimeout(conectar,3000);}
-    }
+    if(connection==='close'){botConectado=false;const code=lastDisconnect?.error?.output?.statusCode;if(code!==DisconnectReason.loggedOut){setTimeout(conectar,3000);}}
   });
   sock.ev.on('creds.update',saveCreds);
   sock.ev.on('messages.upsert',async(m)=>{
@@ -131,7 +127,7 @@ async function conectar(){
         const texto=msg.message?.conversation||msg.message?.extendedTextMessage?.text||'';
         if(!texto.trim())continue;
         console.log(`RECIBIDO de ${from}: "${texto}"`);
-        await responder(from,texto);
+        await responder(from, msg);
       }catch(e){console.error('ERROR:',e.message);}
     }
   });
