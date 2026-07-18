@@ -3,6 +3,10 @@ const qrcode = require('qrcode');
 const http = require('http');
 const pino = require('pino');
 
+let qrImageData = null;
+let botConectado = false;
+const sesiones = {};
+
 const MENUS = {
   1: { nombre:'Lunes', sopas:['Sancocho de Res','Sopa de pollo'], principio:['Frijoles','Lentejas','Espaguetis con atún','Papa francesa'], carnes:['Carne sudada','Chuleta de pollo','Chuleta de cerdo','Pollo salsa bechamel','Lomo de cerdo a la plancha'], ensalada:'Batavia, tomate, zanahoria, pepino y vinagreta', almuerzo:16500, bandeja:15000, especial:22500 },
   2: { nombre:'Martes', sopas:['Sancocho de pollo','Sopa de pastas'], principio:['Frijoles','Arvejas','Puré de papa','Papa francesa'], carnes:['Carne goulash','Albóndigas salsa chimichurri','Pechuga a la plancha','Chuleta de cerdo','Chuleta de pollo'], ensalada:'Tomate, cebolla y limón', almuerzo:16500, bandeja:15000, especial:22500 },
@@ -25,19 +29,16 @@ const FAQ = {
   'gaseosa':'🥤 Gaseosa / Coca-Cola *$3.500*',
 };
 
-let qrImageData = null;
-let botConectado = false;
-const sesiones = {};
-
-const PORT = process.env.PORT || 3000;
+// Servidor HTTP - se refresca cada 3 segundos hasta que aparezca el QR
+const PORT = process.env.PORT || 8080;
 http.createServer((req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   if (botConectado) {
-    res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111;color:#fff;text-align:center}</style></head><body><div><div style="font-size:60px">✅</div><h1 style="color:#25D366">Bot Fogón Sazón Conectado</h1><p>El bot está activo en WhatsApp 🍲</p></div></body></html>`);
+    res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111;color:#fff;text-align:center}</style></head><body><div><div style="font-size:80px">✅</div><h1 style="color:#25D366;margin-top:16px">Bot Fogón Sazón Conectado</h1><p style="margin-top:8px;color:#8696a0">El bot está activo y respondiendo en WhatsApp 🍲</p></div></body></html>`);
   } else if (qrImageData) {
-    res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="10"><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111;color:#fff;text-align:center}img{border-radius:16px;padding:16px;background:#fff}</style></head><body><div><h1 style="color:#25D366">🍲 Fogón Sazón Bot</h1><p>Escanea con WhatsApp del restaurante</p><br><img src="${qrImageData}" width="280"><br><br><p style="color:#8696a0;font-size:12px">Se actualiza cada 10 segundos</p></div></body></html>`);
+    res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="15"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111;color:#fff;text-align:center}img{border-radius:16px;padding:20px;background:#fff;margin-top:20px}</style></head><body><div><h1 style="color:#25D366">🍲 Fogón Sazón</h1><p style="margin-top:8px">Escanea este QR con el WhatsApp del restaurante</p><br><img src="${qrImageData}" width="300" height="300"><br><p style="margin-top:16px;color:#8696a0;font-size:13px">⚠️ Tienes 60 segundos para escanearlo</p></div></body></html>`);
   } else {
-    res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="3"><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111;color:#fff;text-align:center}</style></head><body><div><h1>🍲 Fogón Sazón</h1><p>Iniciando bot... ⏳</p></div></body></html>`);
+    res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="3"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111;color:#fff;text-align:center}</style></head><body><div><h1>🍲 Fogón Sazón</h1><p style="margin-top:12px;color:#8696a0">Generando QR... espera unos segundos ⏳</p></div></body></html>`);
   }
 }).listen(PORT, () => console.log('Servidor en puerto', PORT));
 
@@ -64,7 +65,7 @@ function generarComanda(s) {
 }
 
 async function responder(sock, from, s) {
-  const send = (txt) => sock.sendMessage(from, { text: txt });
+  const send = txt => sock.sendMessage(from, { text: txt });
   const menu = getMenu();
   const t = s._lastMsg.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 
@@ -144,7 +145,10 @@ async function responder(sock, from, s) {
       else await send('Listo para recoger en *Cra. 22 No. 3-81* 📍');
       await send('¡Gracias por elegir *Fogón Sazón*! 🍲💛');
       delete sesiones[from];
-    } else { s.paso='tipo'; await send('¿Qué cambias?\n\n1️⃣ Almuerzo\n2️⃣ Bandeja\n3️⃣ Especial chuleta'); }
+    } else {
+      s.paso='tipo';
+      await send('¿Qué cambias?\n\n1️⃣ Almuerzo\n2️⃣ Bandeja\n3️⃣ Especial chuleta');
+    }
     return;
   }
 }
@@ -154,29 +158,36 @@ async function conectar() {
   const sock = makeWASocket({
     auth: state,
     logger: pino({ level: 'silent' }),
-    printQRInTerminal: false,
+    printQRInTerminal: true,
+    browser: ['Fogon Sazon Bot', 'Chrome', '1.0.0'],
   });
 
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
+      console.log('QR recibido, generando imagen...');
       qrImageData = await qrcode.toDataURL(qr);
-      console.log('QR listo — abre la URL del servicio en el navegador');
+      console.log('QR listo en la URL');
     }
     if (connection === 'open') {
       botConectado = true;
       qrImageData = null;
-      console.log('✅ Bot conectado!');
+      console.log('✅ Bot conectado a WhatsApp!');
     }
     if (connection === 'close') {
       botConectado = false;
-      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      if (shouldReconnect) setTimeout(conectar, 3000);
+      const code = lastDisconnect?.error?.output?.statusCode;
+      console.log('Conexión cerrada, código:', code);
+      if (code !== DisconnectReason.loggedOut) {
+        console.log('Reconectando en 3s...');
+        setTimeout(conectar, 3000);
+      }
     }
   });
 
   sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on('messages.upsert', async ({ messages }) => {
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
     for (const msg of messages) {
       if (!msg.message || msg.key.fromMe) continue;
       const from = msg.key.remoteJid;
@@ -185,9 +196,9 @@ async function conectar() {
       if (!text) continue;
       if (!sesiones[from]) sesiones[from] = { paso: 'inicio' };
       sesiones[from]._lastMsg = text;
-      try { await responder(sock, from, sesiones[from]); } catch(e) { console.error(e); }
+      try { await responder(sock, from, sesiones[from]); } catch(e) { console.error('Error:', e.message); }
     }
   });
 }
 
-conectar();
+conectar().catch(console.error);
