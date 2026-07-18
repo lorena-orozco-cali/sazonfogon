@@ -68,7 +68,8 @@ async function responder(from,texto){
   const s=sesiones[from];
   const menu=getMenu();
   const t=texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  const send=async(txt)=>{
+  const delay=ms=>new Promise(r=>setTimeout(r,ms));
+  const send=async(txt)=>{await delay(1500);
     await sock.sendMessage(from,{text:txt});
     console.log(`ENVIADO: ${txt.substring(0,60)}`);
   };
