@@ -61,38 +61,63 @@ function generarComanda(s){
   return txt;
 }
 
-async function responder(sock,from,texto){
-  const send=txt=>sock.sendMessage(from,{text:txt});
+let sock;
+
+async function send(jid, txt){
+  try{
+    await sock.sendMessage(jid, {text: txt});
+    console.log(`ENVIADO a ${jid}: ${txt.substring(0,50)}`);
+  }catch(e){
+    console.error('ERROR SEND:', e.message);
+  }
+}
+
+async function responder(from, texto){
   if(!sesiones[from])sesiones[from]={paso:'inicio'};
   const s=sesiones[from];
   const menu=getMenu();
   const t=texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  for(const k in FAQ){if(t.includes(k)){await send(FAQ[k]);if(s.paso&&s.paso!=='inicio'&&s.paso!=='fin')await send('¿Continuamos? 😊');return;}}
-  if(s.paso==='inicio'){s.paso='nombre';if(!menu){await send('☀️ ¡Hola! Soy el asistente de *Fogón Sazón* 🍲\n\nHoy es domingo y descansamos 😴\n¡Te esperamos el lunes!');return;}await send('☀️ ¡Hola! Bienvenido a *Fogón Sazón* 🍲\nRestaurante y Cenadero · Cali 🇨🇴\n\n¿Cómo te llamas? 😊');return;}
-  if(s.paso==='nombre'){s.nombre=texto.trim().split(' ')[0];s.paso='tipo';await send(`¡Qué gusto *${s.nombre}*! 😄\n\n${menuTexto(menu)}`);await send(`¿Qué vas a pedir?\n\n1️⃣ Almuerzo completo — $${menu.almuerzo.toLocaleString('es-CO')}\n2️⃣ Bandeja — $${menu.bandeja.toLocaleString('es-CO')}\n3️⃣ Especial chuleta — $${menu.especial.toLocaleString('es-CO')}`);return;}
-  if(s.paso==='tipo'){if(t==='1'||t.includes('almuerzo'))s.tipo='almuerzo';else if(t==='2'||t.includes('bandeja'))s.tipo='bandeja';else if(t==='3'||t.includes('especial')||t.includes('chuleta'))s.tipo='especial';else{await send('Responde *1*, *2* o *3* 😊');return;}s.paso='sopa';await send(`¿Cuál sopa? 🫕\n\n${menu.sopas.map((x,i)=>`${i+1}️⃣ ${x}`).join('\n')}`);return;}
-  if(s.paso==='sopa'){const idx=parseInt(t)-1;if(idx>=0&&idx<menu.sopas.length)s.sopa=menu.sopas[idx];else{await send(`Responde con el número:\n${menu.sopas.map((x,i)=>`${i+1}️⃣ ${x}`).join('\n')}`);return;}s.paso='carne';await send(`¡Rica! 😋 ¿Cuál carne? 🍗\n\n${menu.carnes.map((x,i)=>`${i+1}️⃣ ${x}`).join('\n')}`);return;}
-  if(s.paso==='carne'){const idx=parseInt(t)-1;if(idx>=0&&idx<menu.carnes.length)s.carne=menu.carnes[idx];else{await send(`Responde con el número:\n${menu.carnes.map((x,i)=>`${i+1}️⃣ ${x}`).join('\n')}`);return;}s.paso='bebida';await send(`¿Qué tomas? 🥤\n\n1️⃣ Jugo Natural — $5.000\n2️⃣ Jugo del Valle — $2.500\n3️⃣ Frutal del Valle — $3.500\n4️⃣ Gaseosa — $3.500\n5️⃣ Sin bebida`);return;}
-  if(s.paso==='bebida'){const bebs=['Jugo Natural $5.000','Jugo del Valle $2.500','Frutal del Valle $3.500','Gaseosa $3.500',''];const idx=parseInt(t)-1;if(idx>=0&&idx<bebs.length)s.bebida=bebs[idx];else{await send('Responde del 1 al 5 😊');return;}s.paso='entrega';await send('¿Cómo lo recibes?\n\n1️⃣ Domicilio\n2️⃣ Recoger en el restaurante');return;}
-  if(s.paso==='entrega'){if(t==='1'||t.includes('domicilio')){s.entrega='domicilio';s.paso='dir';await send('¿Cuál es tu dirección? 📍');}else if(t==='2'||t.includes('recoger')){s.entrega='tienda';s.paso='obs';await send('¿Alguna observación? 📝 Si no, escribe *No*');}else{await send('Responde *1* o *2* 😊');}return;}
-  if(s.paso==='dir'){s.dir=texto.trim();s.paso='tel';await send('¿Tu teléfono? 📱');return;}
-  if(s.paso==='tel'){s.tel=texto.trim();s.paso='obs';await send('¿Alguna observación? 📝 Si no, escribe *No*');return;}
-  if(s.paso==='obs'){s.obs=texto.trim();s.paso='conf';await send(generarComanda(s));await send('¿Confirmamos? ✅\n\n1️⃣ Sí\n2️⃣ Modificar');return;}
+
+  console.log(`RESPONDER from=${from} paso=${s.paso} texto="${texto}"`);
+
+  for(const k in FAQ){
+    if(t.includes(k)){
+      await send(from, FAQ[k]);
+      if(s.paso&&s.paso!=='inicio'&&s.paso!=='fin') await send(from,'¿Continuamos? 😊');
+      return;
+    }
+  }
+
+  if(s.paso==='inicio'){
+    s.paso='nombre';
+    if(!menu){await send(from,'☀️ ¡Hola! Soy el asistente de *Fogón Sazón* 🍲\n\nHoy es domingo y descansamos 😴\n¡Te esperamos el lunes!');return;}
+    await send(from,'☀️ ¡Hola! Bienvenido a *Fogón Sazón* 🍲\nRestaurante y Cenadero · Cali 🇨🇴\n\n¿Cómo te llamas? 😊');
+    return;
+  }
+  if(s.paso==='nombre'){s.nombre=texto.trim().split(' ')[0];s.paso='tipo';await send(from,`¡Qué gusto *${s.nombre}*! 😄\n\n${menuTexto(menu)}`);await send(from,`¿Qué vas a pedir?\n\n1️⃣ Almuerzo completo — $${menu.almuerzo.toLocaleString('es-CO')}\n2️⃣ Bandeja — $${menu.bandeja.toLocaleString('es-CO')}\n3️⃣ Especial chuleta — $${menu.especial.toLocaleString('es-CO')}`);return;}
+  if(s.paso==='tipo'){if(t==='1'||t.includes('almuerzo'))s.tipo='almuerzo';else if(t==='2'||t.includes('bandeja'))s.tipo='bandeja';else if(t==='3'||t.includes('especial')||t.includes('chuleta'))s.tipo='especial';else{await send(from,'Responde *1*, *2* o *3* 😊');return;}s.paso='sopa';await send(from,`¿Cuál sopa? 🫕\n\n${menu.sopas.map((x,i)=>`${i+1}️⃣ ${x}`).join('\n')}`);return;}
+  if(s.paso==='sopa'){const idx=parseInt(t)-1;if(idx>=0&&idx<menu.sopas.length)s.sopa=menu.sopas[idx];else{await send(from,`Responde con el número:\n${menu.sopas.map((x,i)=>`${i+1}️⃣ ${x}`).join('\n')}`);return;}s.paso='carne';await send(from,`¡Rica! 😋 ¿Cuál carne? 🍗\n\n${menu.carnes.map((x,i)=>`${i+1}️⃣ ${x}`).join('\n')}`);return;}
+  if(s.paso==='carne'){const idx=parseInt(t)-1;if(idx>=0&&idx<menu.carnes.length)s.carne=menu.carnes[idx];else{await send(from,`Responde con el número:\n${menu.carnes.map((x,i)=>`${i+1}️⃣ ${x}`).join('\n')}`);return;}s.paso='bebida';await send(from,`¿Qué tomas? 🥤\n\n1️⃣ Jugo Natural — $5.000\n2️⃣ Jugo del Valle — $2.500\n3️⃣ Frutal del Valle — $3.500\n4️⃣ Gaseosa — $3.500\n5️⃣ Sin bebida`);return;}
+  if(s.paso==='bebida'){const bebs=['Jugo Natural $5.000','Jugo del Valle $2.500','Frutal del Valle $3.500','Gaseosa $3.500',''];const idx=parseInt(t)-1;if(idx>=0&&idx<bebs.length)s.bebida=bebs[idx];else{await send(from,'Responde del 1 al 5 😊');return;}s.paso='entrega';await send(from,'¿Cómo lo recibes?\n\n1️⃣ Domicilio\n2️⃣ Recoger en el restaurante');return;}
+  if(s.paso==='entrega'){if(t==='1'||t.includes('domicilio')){s.entrega='domicilio';s.paso='dir';await send(from,'¿Cuál es tu dirección? 📍');}else if(t==='2'||t.includes('recoger')){s.entrega='tienda';s.paso='obs';await send(from,'¿Alguna observación? 📝 Si no, escribe *No*');}else{await send(from,'Responde *1* o *2* 😊');}return;}
+  if(s.paso==='dir'){s.dir=texto.trim();s.paso='tel';await send(from,'¿Tu teléfono? 📱');return;}
+  if(s.paso==='tel'){s.tel=texto.trim();s.paso='obs';await send(from,'¿Alguna observación? 📝 Si no, escribe *No*');return;}
+  if(s.paso==='obs'){s.obs=texto.trim();s.paso='conf';await send(from,generarComanda(s));await send(from,'¿Confirmamos? ✅\n\n1️⃣ Sí\n2️⃣ Modificar');return;}
   if(s.paso==='conf'){
     if(t==='1'||t.includes('si')||t.includes('confirm')){
-      await send(`🎉 *¡Pedido confirmado, ${s.nombre}!* 🔥`);
-      if(s.entrega==='domicilio')await send(`Te llevamos a *${s.dir}* 🛵 En 30-45 min.`);
-      else await send('Listo para recoger en *Cra. 22 No. 3-81* 📍');
-      await send('¡Gracias por elegir *Fogón Sazón*! 🍲💛');
+      await send(from,`🎉 *¡Pedido confirmado, ${s.nombre}!* 🔥`);
+      if(s.entrega==='domicilio')await send(from,`Te llevamos a *${s.dir}* 🛵 En 30-45 min.`);
+      else await send(from,'Listo para recoger en *Cra. 22 No. 3-81* 📍');
+      await send(from,'¡Gracias por elegir *Fogón Sazón*! 🍲💛');
       delete sesiones[from];
-    }else{s.paso='tipo';await send('¿Qué cambias?\n\n1️⃣ Almuerzo\n2️⃣ Bandeja\n3️⃣ Especial chuleta');}
+    }else{s.paso='tipo';await send(from,'¿Qué cambias?\n\n1️⃣ Almuerzo\n2️⃣ Bandeja\n3️⃣ Especial chuleta');}
     return;
   }
 }
 
 async function conectar(){
   const {state,saveCreds}=await useMultiFileAuthState('auth_info');
-  const sock=makeWASocket({
+  sock=makeWASocket({
     auth:state,
     logger:pino({level:'silent'}),
     printQRInTerminal:false,
@@ -103,22 +128,26 @@ async function conectar(){
   sock.ev.on('connection.update',async({connection,lastDisconnect,qr})=>{
     if(qr){qrImageData=await qrcode.toDataURL(qr);console.log('QR listo');}
     if(connection==='open'){botConectado=true;qrImageData=null;console.log('✅ Conectado!');}
-    if(connection==='close'){botConectado=false;const code=lastDisconnect?.error?.output?.statusCode;if(code!==DisconnectReason.loggedOut){setTimeout(conectar,3000);}}
+    if(connection==='close'){
+      botConectado=false;
+      const code=lastDisconnect?.error?.output?.statusCode;
+      console.log('Desconectado código:',code);
+      if(code!==DisconnectReason.loggedOut){setTimeout(conectar,3000);}
+    }
   });
   sock.ev.on('creds.update',saveCreds);
   sock.ev.on('messages.upsert',async(m)=>{
-    console.log('messages.upsert type:',m.type,'count:',m.messages.length);
     for(const msg of m.messages){
       try{
         if(!msg.message)continue;
         if(msg.key.fromMe)continue;
         const from=msg.key.remoteJid;
         if(!from||from.endsWith('@g.us'))continue;
-        const texto=msg.message?.conversation||msg.message?.extendedTextMessage?.text||msg.message?.imageMessage?.caption||'';
+        const texto=msg.message?.conversation||msg.message?.extendedTextMessage?.text||'';
         if(!texto.trim())continue;
-        console.log(`MSG de ${from}: "${texto}"`);
-        await responder(sock,from,texto);
-      }catch(e){console.error('Error:',e.message);}
+        console.log(`RECIBIDO de ${from}: "${texto}"`);
+        await responder(from,texto);
+      }catch(e){console.error('ERROR:',e.message,e.stack);}
     }
   });
 }
