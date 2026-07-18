@@ -33,13 +33,9 @@ const FAQ={
 const app = express();
 const PORT = process.env.PORT || 8080;
 app.get('/',(req,res)=>{
-  if(botConectado){
-    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111;color:#fff;text-align:center}</style></head><body><div><div style="font-size:80px">✅</div><h1 style="color:#25D366">Bot Fogón Sazón Conectado</h1><p style="color:#8696a0">Activo en WhatsApp 🍲</p></div></body></html>`);
-  } else if(qrImageData){
-    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="20"><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111;color:#fff;text-align:center}img{border-radius:16px;padding:20px;background:#fff;margin-top:20px}</style></head><body><div><h1 style="color:#25D366">🍲 Fogón Sazón</h1><p>Escanea con el WhatsApp del restaurante</p><br><img src="${qrImageData}" width="300"><br><p style="margin-top:16px;color:#8696a0;font-size:13px">⚠️ 60 segundos para escanear</p></div></body></html>`);
-  } else {
-    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="3"><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111;color:#fff;text-align:center}</style></head><body><div><h1>🍲 Fogón Sazón</h1><p style="color:#8696a0">Generando QR... ⏳</p></div></body></html>`);
-  }
+  if(botConectado){res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111;color:#fff;text-align:center}</style></head><body><div><div style="font-size:80px">✅</div><h1 style="color:#25D366">Bot Fogón Sazón Conectado</h1><p style="color:#8696a0">Activo en WhatsApp 🍲</p></div></body></html>`);}
+  else if(qrImageData){res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="20"><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111;color:#fff;text-align:center}img{border-radius:16px;padding:20px;background:#fff;margin-top:20px}</style></head><body><div><h1 style="color:#25D366">🍲 Fogón Sazón</h1><p>Escanea con el WhatsApp del restaurante</p><br><img src="${qrImageData}" width="300"><br><p style="margin-top:16px;color:#8696a0;font-size:13px">⚠️ 60 segundos para escanear</p></div></body></html>`);}
+  else{res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="3"><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111;color:#fff;text-align:center}</style></head><body><div><h1>🍲 Fogón Sazón</h1><p style="color:#8696a0">Generando QR... ⏳</p></div></body></html>`);}
 });
 app.listen(PORT,()=>console.log('Puerto',PORT));
 
@@ -71,15 +67,7 @@ async function responder(sock,from,texto){
   const s=sesiones[from];
   const menu=getMenu();
   const t=texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-
-  for(const k in FAQ){
-    if(t.includes(k)){
-      await send(FAQ[k]);
-      if(s.paso&&s.paso!=='inicio'&&s.paso!=='fin')await send('¿Continuamos? 😊');
-      return;
-    }
-  }
-
+  for(const k in FAQ){if(t.includes(k)){await send(FAQ[k]);if(s.paso&&s.paso!=='inicio'&&s.paso!=='fin')await send('¿Continuamos? 😊');return;}}
   if(s.paso==='inicio'){s.paso='nombre';if(!menu){await send('☀️ ¡Hola! Soy el asistente de *Fogón Sazón* 🍲\n\nHoy es domingo y descansamos 😴\n¡Te esperamos el lunes!');return;}await send('☀️ ¡Hola! Bienvenido a *Fogón Sazón* 🍲\nRestaurante y Cenadero · Cali 🇨🇴\n\n¿Cómo te llamas? 😊');return;}
   if(s.paso==='nombre'){s.nombre=texto.trim().split(' ')[0];s.paso='tipo';await send(`¡Qué gusto *${s.nombre}*! 😄\n\n${menuTexto(menu)}`);await send(`¿Qué vas a pedir?\n\n1️⃣ Almuerzo completo — $${menu.almuerzo.toLocaleString('es-CO')}\n2️⃣ Bandeja — $${menu.bandeja.toLocaleString('es-CO')}\n3️⃣ Especial chuleta — $${menu.especial.toLocaleString('es-CO')}`);return;}
   if(s.paso==='tipo'){if(t==='1'||t.includes('almuerzo'))s.tipo='almuerzo';else if(t==='2'||t.includes('bandeja'))s.tipo='bandeja';else if(t==='3'||t.includes('especial')||t.includes('chuleta'))s.tipo='especial';else{await send('Responde *1*, *2* o *3* 😊');return;}s.paso='sopa';await send(`¿Cuál sopa? 🫕\n\n${menu.sopas.map((x,i)=>`${i+1}️⃣ ${x}`).join('\n')}`);return;}
@@ -110,27 +98,27 @@ async function conectar(){
     printQRInTerminal:false,
     browser:Browsers.baileys('Desktop'),
     getMessage:async()=>({conversation:''}),
+    syncFullHistory:false,
   });
   sock.ev.on('connection.update',async({connection,lastDisconnect,qr})=>{
     if(qr){qrImageData=await qrcode.toDataURL(qr);console.log('QR listo');}
     if(connection==='open'){botConectado=true;qrImageData=null;console.log('✅ Conectado!');}
-    if(connection==='close'){
-      botConectado=false;
-      const code=lastDisconnect?.error?.output?.statusCode;
-      if(code!==DisconnectReason.loggedOut){setTimeout(conectar,3000);}
-    }
+    if(connection==='close'){botConectado=false;const code=lastDisconnect?.error?.output?.statusCode;if(code!==DisconnectReason.loggedOut){setTimeout(conectar,3000);}}
   });
   sock.ev.on('creds.update',saveCreds);
-  sock.ev.on('messages.upsert',async({messages,type})=>{
-    if(type!=='notify')return;
-    for(const msg of messages){
-      if(!msg.message||msg.key.fromMe)continue;
-      const from=msg.key.remoteJid;
-      if(!from||from.endsWith('@g.us'))continue;
-      const texto=msg.message?.conversation||msg.message?.extendedTextMessage?.text||'';
-      if(!texto.trim())continue;
-      try{await responder(sock,from,texto);}
-      catch(e){console.error('Error:',e.message);}
+  sock.ev.on('messages.upsert',async(m)=>{
+    console.log('messages.upsert type:',m.type,'count:',m.messages.length);
+    for(const msg of m.messages){
+      try{
+        if(!msg.message)continue;
+        if(msg.key.fromMe)continue;
+        const from=msg.key.remoteJid;
+        if(!from||from.endsWith('@g.us'))continue;
+        const texto=msg.message?.conversation||msg.message?.extendedTextMessage?.text||msg.message?.imageMessage?.caption||'';
+        if(!texto.trim())continue;
+        console.log(`MSG de ${from}: "${texto}"`);
+        await responder(sock,from,texto);
+      }catch(e){console.error('Error:',e.message);}
     }
   });
 }
