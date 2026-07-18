@@ -1,7 +1,6 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const http = require('http');
-const pino = require('pino');
 
 let qrImageData = null;
 let botConectado = false;
@@ -29,16 +28,15 @@ const FAQ = {
   'gaseosa':'🥤 Gaseosa / Coca-Cola *$3.500*',
 };
 
-// Servidor HTTP - se refresca cada 3 segundos hasta que aparezca el QR
 const PORT = process.env.PORT || 8080;
 http.createServer((req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   if (botConectado) {
-    res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111;color:#fff;text-align:center}</style></head><body><div><div style="font-size:80px">✅</div><h1 style="color:#25D366;margin-top:16px">Bot Fogón Sazón Conectado</h1><p style="margin-top:8px;color:#8696a0">El bot está activo y respondiendo en WhatsApp 🍲</p></div></body></html>`);
+    res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111;color:#fff;text-align:center}</style></head><body><div><div style="font-size:80px">✅</div><h1 style="color:#25D366;margin-top:16px">Bot Fogón Sazón Conectado</h1><p style="color:#8696a0;margin-top:8px">Activo en WhatsApp 🍲</p></div></body></html>`);
   } else if (qrImageData) {
-    res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="15"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111;color:#fff;text-align:center}img{border-radius:16px;padding:20px;background:#fff;margin-top:20px}</style></head><body><div><h1 style="color:#25D366">🍲 Fogón Sazón</h1><p style="margin-top:8px">Escanea este QR con el WhatsApp del restaurante</p><br><img src="${qrImageData}" width="300" height="300"><br><p style="margin-top:16px;color:#8696a0;font-size:13px">⚠️ Tienes 60 segundos para escanearlo</p></div></body></html>`);
+    res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="20"><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111;color:#fff;text-align:center}img{border-radius:16px;padding:20px;background:#fff;margin-top:20px}</style></head><body><div><h1 style="color:#25D366">🍲 Fogón Sazón</h1><p style="margin-top:8px">Escanea con el WhatsApp del restaurante</p><br><img src="${qrImageData}" width="300"><br><p style="margin-top:16px;color:#8696a0;font-size:13px">⚠️ Tienes 60 segundos para escanearlo</p></div></body></html>`);
   } else {
-    res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="3"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111;color:#fff;text-align:center}</style></head><body><div><h1>🍲 Fogón Sazón</h1><p style="margin-top:12px;color:#8696a0">Generando QR... espera unos segundos ⏳</p></div></body></html>`);
+    res.end(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="3"><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#111;color:#fff;text-align:center}</style></head><body><div><h1>🍲 Fogón Sazón</h1><p style="margin-top:12px;color:#8696a0">Generando QR... ⏳</p></div></body></html>`);
   }
 }).listen(PORT, () => console.log('Servidor en puerto', PORT));
 
@@ -64,10 +62,10 @@ function generarComanda(s) {
   return txt;
 }
 
-async function responder(sock, from, s) {
-  const send = txt => sock.sendMessage(from, { text: txt });
+async function responder(client, msg, s) {
+  const send = txt => client.sendMessage(msg.from, txt);
   const menu = getMenu();
-  const t = s._lastMsg.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const t = msg.body.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 
   for (const k in FAQ) {
     if (t.includes(k)) {
@@ -84,7 +82,7 @@ async function responder(sock, from, s) {
     return;
   }
   if (s.paso==='nombre') {
-    s.nombre=s._lastMsg.trim().split(' ')[0]; s.paso='tipo';
+    s.nombre=msg.body.trim().split(' ')[0]; s.paso='tipo';
     await send(`¡Qué gusto *${s.nombre}*! 😄\n\n${menuTexto(menu)}`);
     await send(`¿Qué vas a pedir?\n\n1️⃣ Almuerzo completo — $${menu.almuerzo.toLocaleString('es-CO')}\n2️⃣ Bandeja — $${menu.bandeja.toLocaleString('es-CO')}\n3️⃣ Especial chuleta — $${menu.especial.toLocaleString('es-CO')}\n\nResponde con el número 👆`);
     return;
@@ -111,7 +109,7 @@ async function responder(sock, from, s) {
     if (idx>=0&&idx<menu.carnes.length) s.carne=menu.carnes[idx];
     else { await send(`Responde con el número:\n${menu.carnes.map((x,i)=>`${i+1}️⃣ ${x}`).join('\n')}`); return; }
     s.paso='bebida';
-    await send(`¿Qué tomas? 🥤\n\n1️⃣ Jugo Natural — $5.000\n2️⃣ Jugo del Valle — $2.500\n3️⃣ Frutal del Valle — $3.500\n4️⃣ Gaseosa — $3.500\n5️⃣ Sin bebida\n\nResponde con el número 👆`);
+    await send(`¿Qué tomas? 🥤\n\n1️⃣ Jugo Natural — $5.000\n2️⃣ Jugo del Valle — $2.500\n3️⃣ Frutal del Valle — $3.500\n4️⃣ Gaseosa — $3.500\n5️⃣ Sin bebida`);
     return;
   }
   if (s.paso==='bebida') {
@@ -129,10 +127,10 @@ async function responder(sock, from, s) {
     else { await send('Responde *1* o *2* 😊'); }
     return;
   }
-  if (s.paso==='dir') { s.dir=s._lastMsg.trim(); s.paso='tel'; await send('¿Tu teléfono? 📱'); return; }
-  if (s.paso==='tel') { s.tel=s._lastMsg.trim(); s.paso='obs'; await send('¿Alguna observación? 📝 Si no, escribe *No*'); return; }
+  if (s.paso==='dir') { s.dir=msg.body.trim(); s.paso='tel'; await send('¿Tu teléfono? 📱'); return; }
+  if (s.paso==='tel') { s.tel=msg.body.trim(); s.paso='obs'; await send('¿Alguna observación? 📝 Si no, escribe *No*'); return; }
   if (s.paso==='obs') {
-    s.obs=s._lastMsg.trim(); s.paso='conf';
+    s.obs=msg.body.trim(); s.paso='conf';
     await send(generarComanda(s));
     await send('¿Confirmamos? ✅\n\n1️⃣ Sí, confirmar\n2️⃣ Modificar');
     return;
@@ -144,7 +142,7 @@ async function responder(sock, from, s) {
       if (s.entrega==='domicilio') await send(`Te llevamos a *${s.dir}* 🛵 En 30-45 min.`);
       else await send('Listo para recoger en *Cra. 22 No. 3-81* 📍');
       await send('¡Gracias por elegir *Fogón Sazón*! 🍲💛');
-      delete sesiones[from];
+      delete sesiones[msg.from];
     } else {
       s.paso='tipo';
       await send('¿Qué cambias?\n\n1️⃣ Almuerzo\n2️⃣ Bandeja\n3️⃣ Especial chuleta');
@@ -153,52 +151,30 @@ async function responder(sock, from, s) {
   }
 }
 
-async function conectar() {
-  const { state, saveCreds } = await useMultiFileAuthState('auth_info');
-  const sock = makeWASocket({
-    auth: state,
-    logger: pino({ level: 'silent' }),
-    printQRInTerminal: true,
-    browser: ['Fogon Sazon Bot', 'Chrome', '1.0.0'],
-  });
+const client = new Client({
+  authStrategy: new LocalAuth(),
+  puppeteer: {
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome-stable',
+    args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--disable-gpu']
+  }
+});
 
-  sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
-    if (qr) {
-      console.log('QR recibido, generando imagen...');
-      qrImageData = await qrcode.toDataURL(qr);
-      console.log('QR listo en la URL');
-    }
-    if (connection === 'open') {
-      botConectado = true;
-      qrImageData = null;
-      console.log('✅ Bot conectado a WhatsApp!');
-    }
-    if (connection === 'close') {
-      botConectado = false;
-      const code = lastDisconnect?.error?.output?.statusCode;
-      console.log('Conexión cerrada, código:', code);
-      if (code !== DisconnectReason.loggedOut) {
-        console.log('Reconectando en 3s...');
-        setTimeout(conectar, 3000);
-      }
-    }
-  });
+client.on('qr', async qr => {
+  console.log('QR recibido');
+  qrImageData = await qrcode.toDataURL(qr);
+  console.log('QR listo');
+});
 
-  sock.ev.on('creds.update', saveCreds);
+client.on('ready', () => {
+  botConectado = true;
+  qrImageData = null;
+  console.log('✅ Bot conectado!');
+});
 
-  sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return;
-    for (const msg of messages) {
-      if (!msg.message || msg.key.fromMe) continue;
-      const from = msg.key.remoteJid;
-      if (from.endsWith('@g.us')) continue;
-      const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
-      if (!text) continue;
-      if (!sesiones[from]) sesiones[from] = { paso: 'inicio' };
-      sesiones[from]._lastMsg = text;
-      try { await responder(sock, from, sesiones[from]); } catch(e) { console.error('Error:', e.message); }
-    }
-  });
-}
+client.on('message', async msg => {
+  if (msg.isGroupMsg) return;
+  if (!sesiones[msg.from]) sesiones[msg.from] = { paso: 'inicio' };
+  try { await responder(client, msg, sesiones[msg.from]); } catch(e) { console.error(e.message); }
+});
 
-conectar().catch(console.error);
+client.initialize();

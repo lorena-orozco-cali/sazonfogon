@@ -2,12 +2,9 @@
   "name": "fogon-sazon-bot",
   "version": "1.0.0",
   "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
+  "scripts": { "start": "node index.js" },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.9",
-    "qrcode": "^1.5.3",
-    "pino": "^9.0.0"
+    "whatsapp-web.js": "^1.23.0",
+    "qrcode": "^1.5.3"
   }
 }
