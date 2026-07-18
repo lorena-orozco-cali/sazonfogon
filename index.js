@@ -1,13 +1,9 @@
-const baileys = require('@whiskeysockets/baileys');
-const makeWASocket = baileys.default;
-const { useMultiFileAuthState, DisconnectReason, Browsers, fetchLatestBaileysVersion, delay } = baileys;
+const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const express = require('express');
-const pino = require('pino');
 
 let qrImageData = null;
 let botConectado = false;
-let sock = null;
 const sesiones = {};
 
 const MENUS = {
@@ -62,17 +58,15 @@ function generarComanda(s){
   return txt;
 }
 
-async function responder(from, msg){
-  if(!sock) return;
-  if(!sesiones[from]) sesiones[from]={paso:'inicio'};
+async function responder(client, msg){
+  const from = msg.from;
+  const texto = msg.body;
+  if(!sesiones[from])sesiones[from]={paso:'inicio'};
   const s=sesiones[from];
   const menu=getMenu();
-  const texto=msg.message?.conversation||msg.message?.extendedTextMessage?.text||'';
   const t=texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-
   const send=async(txt)=>{
-    await delay(2000);
-    await sock.sendMessage(from, {text:txt}, {quoted:msg});
+    await client.sendMessage(from,txt);
     console.log(`ENVIADO: ${txt.substring(0,60)}`);
   };
 
@@ -99,38 +93,30 @@ async function responder(from, msg){
   }
 }
 
-async function conectar(){
-  const {state,saveCreds}=await useMultiFileAuthState('auth_info');
-  const {version}=await fetchLatestBaileysVersion();
-  sock=makeWASocket({
-    version,
-    auth:state,
-    logger:pino({level:'silent'}),
-    printQRInTerminal:false,
-    browser:Browsers.baileys('Desktop'),
-    getMessage:async()=>undefined,
-    syncFullHistory:false,
-  });
-  sock.ev.on('connection.update',async({connection,lastDisconnect,qr})=>{
-    if(qr){qrImageData=await qrcode.toDataURL(qr);console.log('QR listo');}
-    if(connection==='open'){botConectado=true;qrImageData=null;console.log('✅ Conectado!');}
-    if(connection==='close'){botConectado=false;const code=lastDisconnect?.error?.output?.statusCode;if(code!==DisconnectReason.loggedOut){setTimeout(conectar,3000);}}
-  });
-  sock.ev.on('creds.update',saveCreds);
-  sock.ev.on('messages.upsert',async(m)=>{
-    for(const msg of m.messages){
-      try{
-        if(!msg.message)continue;
-        if(msg.key.fromMe)continue;
-        const from=msg.key.remoteJid;
-        if(!from||from.endsWith('@g.us'))continue;
-        const texto=msg.message?.conversation||msg.message?.extendedTextMessage?.text||'';
-        if(!texto.trim())continue;
-        console.log(`RECIBIDO de ${from}: "${texto}"`);
-        await responder(from, msg);
-      }catch(e){console.error('ERROR:',e.message);}
-    }
-  });
-}
+const client = new Client({
+  authStrategy: new LocalAuth(),
+  puppeteer:{
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+    args:['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--disable-gpu']
+  }
+});
 
-conectar().catch(console.error);
+client.on('qr', async qr => {
+  qrImageData = await qrcode.toDataURL(qr);
+  console.log('QR listo');
+});
+
+client.on('ready', () => {
+  botConectado = true;
+  qrImageData = null;
+  console.log('✅ Conectado!');
+});
+
+client.on('message', async msg => {
+  if(msg.isGroupMsg) return;
+  console.log(`RECIBIDO de ${msg.from}: "${msg.body}"`);
+  try{ await responder(client, msg); }
+  catch(e){ console.error('ERROR:', e.message); }
+});
+
+client.initialize();
